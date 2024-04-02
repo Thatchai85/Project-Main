@@ -29,13 +29,13 @@ AccelStepper stepperZ(1, STEP_PIN_Z, DIR_PIN_Z);
 const int limitX1 = 28;
 const int limitX2 = 30;
 const int limitY1 = 32; 
-//const int limitY2 = 34;
+const int limitZ = 34;
 
-const int resetboard = 36;
-int Laser = 34; // Define Laser pin
+const int resetboard = 38;
+int Laser = 36; // Define Laser pin
 
-const int motorspeed = 100;
-const int ac_speed = 100;
+const int motorspeed = 200;
+const int ac_speed = 200;
 bool motorStopped = false; // Flag to track if the motor has been stopped
 
 const int BUFFER_SIZE = 256; // Adjust based on the expected package size
@@ -49,15 +49,10 @@ void setup() {
   digitalWrite(EN_PIN_X2, LOW);
   
   pinMode(EN_PIN_Y, OUTPUT);
-  digitalWrite(EN_PIN_Y, LOW);  // Enable Stepper
+  digitalWrite(EN_PIN_Y, LOW);
 
-  pinMode(limitX1, INPUT);
-  //pinMode(limitX2, INPUT);
-  pinMode(limitY1, INPUT);
-  //pinMode(limitY2, INPUT);
-  pinMode(Laser, OUTPUT);
-  digitalWrite(resetboard, HIGH);
-  pinMode(resetboard, OUTPUT);
+  pinMode(EN_PIN_Z, OUTPUT);
+  digitalWrite(EN_PIN_Z, LOW);
 
   stepperX1.setMaxSpeed(motorspeed);
   stepperX1.setAcceleration(ac_speed);
@@ -70,6 +65,14 @@ void setup() {
 
   stepperZ.setMaxSpeed(motorspeed);
   stepperZ.setAcceleration(ac_speed);
+
+  pinMode(limitX1, INPUT);
+  pinMode(limitX2, INPUT);
+  pinMode(limitY1, INPUT);
+  //pinMode(limitY2, INPUT);
+  pinMode(Laser, OUTPUT);
+  digitalWrite(resetboard, HIGH);
+  pinMode(resetboard, OUTPUT);
   
 }
 
@@ -101,11 +104,14 @@ void loop() {
         int time_value = doc["data"]["t"];
         // Process the received values
         moveRobot(x, y, time_value);
-        // delay(time_value);
+        moveZDown(time_value);
+        imerse(time_value);
+        moveZUp();
       }
       else if (doc["command"] == "Homeposition") {
         HomepositionX();
         HomepositionY();
+        HomepositionZ();
         delay(2000);
         resetBoard();
         Serial.println("Board reset complete");
@@ -161,9 +167,7 @@ void moveRobot(int x, int y, int time_value) {
   while (stepperY.distanceToGo() !=0){
     stepperY.run();
     }
-  delay(time_value);
-  Serial.println("Time to dipping:");
-  Serial.println(time_value);
+  delay(1000);
 }
 
 ///////////////////Home Position X//////////////////////////
@@ -173,58 +177,12 @@ void HomepositionX(){
   //runmotorX1forward();
   //runmotorX2forward();
 }
-/*
-void runmotorX1forward() {
-  //stepperX1.setAcceleration(500);
-  //digitalWrite(Laser, HIGH);
-  stepperX1.setSpeed(motorspeed);
-  stepperX1.moveTo(1900);
-  Serial.println("Motor running forward");
-  while (stepperX1.distanceToGo() != 0) {
-    if (digitalRead(limitX1) == HIGH) {
-      stepperX1.stop();
-      Serial.println("Limit switchX activated. Homing complete for X axis");
-      delay(3000);
-      Serial.println("Move back a little bit");
-      stepperX1.setAcceleration(500);
-      stepperX1.setSpeed(-motorspeed);
-      stepperX1.move(-15); // Move back 4 steps
-      stepperX1.runToPosition();
 
-      Serial.println("Homing complete. Motor at home position.");
-      break;
-    }
-    stepperX1.run();
-  }
-}
-void runmotorX2forward() {
-  //stepperX2.setAcceleration(500);
-  stepperX2.setSpeed(motorspeed);
-  stepperX2.moveTo(1900);
-  Serial.println("Motor running forward");
-  while (stepperX2.distanceToGo() != 0) {
-    if (digitalRead(limitX1) == HIGH) {
-      stepperX2.stop();
-      Serial.println("Limit switchY1 activated. Homing complete for Y1 axis");
-      delay(3000);
-      Serial.println("Move back a little bit");
-      stepperX2.setAcceleration(500);
-      stepperX2.setSpeed(-motorspeed);
-      stepperX2.move(15); // Move back 4 steps
-      stepperX2.runToPosition();
-     
-      Serial.println("Homing complete. Motor at home position.");
-      break;
-    }
-    stepperX2.run();
-  }
-}
-*/
 void runmotorXforward(){
   stepperX1.setSpeed(motorspeed);
   stepperX2.setSpeed(motorspeed);
-  stepperX1.moveTo(1900);
-  stepperX2.moveTo(1900);
+  stepperX1.moveTo(3000);
+  stepperX2.moveTo(3000);
   Serial.println("Motor running forward");
   while (stepperX1.distanceToGo() != 0 && stepperX2.distanceToGo() != 0) {
     if (digitalRead(limitX1) == HIGH || digitalRead(limitX2) == HIGH) {
@@ -279,6 +237,66 @@ void runmotorYforward() {
 }
 
 ////////////////////////////////////////////////////////////////
+void HomepositionZ(){
+  Serial.println("Motor running forward");
+  runmotorZforward();
+  }
+  
+void runmotorZforward(){
+  stepperZ.setSpeed(motorspeed);
+  stepperZ.moveTo(3800);
+  Serial.println("Motor Z running forward");
+  while (stepperZ.distanceToGo() != 0) {
+    if (digitalRead(limitZ) == HIGH) {
+      stepperZ.stop();
+      Serial.println("Limit switchZ activated. Homing complete for Y axis");
+      delay(3000);
+      Serial.println("Move back a little bit");
+      stepperZ.setAcceleration(500);
+      stepperZ.setSpeed(-motorspeed);
+      stepperZ.move(-30); // Move back 4 steps
+      stepperZ.runToPosition();
+
+      Serial.println("Homing complete. Motor at home position.");
+      break;
+    }
+    stepperZ.run();
+  }
+}
+/////////////////////////////////////////////////////////////////
+void moveZDown(int x, int y, int time_value){
+  if (x == 0 && y ==0){
+    Serial.println("request");
+  }
+  else{
+    Serial.println("moving down");
+    //Move stepper Motor Z Up-down
+    Serial.println("Time to dipping:");
+    Serial.println(time_value);
+    stepperZ.setSpeed(motorspeed);
+    stepperZ.moveTo(-3700);
+    while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+    delay(1000);
+  }
+}
+void imerse(int time_value){
+  // Implement your imersing task
+  Serial.println("imersing");
+  delay(time_value * 1000);
+}
+
+void moveZUp(){
+  Serial.println("moving up");
+  stepperZ.moveTo(-2200);
+  while (stepperZ.distanceToGo() !=0){
+    stepperZ.run();
+    }
+  delay(1000);
+  Serial.println("request");
+}
+
 
 void stopRobot() {
   Serial.println("Robot stopped");
@@ -289,22 +307,6 @@ void pauseRobot() {
   stepperX1.stop();
   stepperX2.stop();
   stepperY.stop();
-}
-
-void imerse(int time_value){
-  // Implement your imersing task
-  Serial.println("imersing");
-  delay(time_value * 100);
-}
-
-void moveUp(){
-  // write your z- movement here
-  Serial.println("moving up");
-}
-
-void moveDown(){
-  // write your z+ movement here
-  Serial.println("moving down");
 }
 
 void ShakeRack(){

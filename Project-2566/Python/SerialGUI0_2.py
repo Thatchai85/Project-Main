@@ -1,5 +1,6 @@
 import serial
 import json
+import csv
 import time
 import threading
 import random
@@ -38,17 +39,19 @@ def Steppercalculation(data):
     Process_time = [row[2] for row in data]
     #print("time:" ,Process_time)
     m2s = 0.2  # mm/step
-    Xfactor = 1.18518519 #px/mm.
-    Yfactor = 1.17073 #px/mm.
-    Xspace = 160
-    Yspace = 0
+    #Xfactor = 640/450 #px/mm.
+    #Yfactor = 480/340 #px/mm.
+    Xfactor = 356/257
+    Yfactor = 362/265
+    Xspace = 0
+    Yspace = 20
     
     X_position = [row[0] for row in data]
     Y_position = [row[1] for row in data]
     
-    for X_pixel, Y_pixel in zip(X_position, Y_position):
+    for X_pixel, Y_pixel in zip(X_position,Y_position):
         X_Step = ((((640 - X_pixel) / Xfactor) / m2s) + Xspace)
-        Y_Step = ((((480 - Y_pixel) / Yfactor) / m2s) - Yspace)
+        Y_Step = ((((480 - Y_pixel) / Yfactor) / m2s) + Yspace)
         
         #Values_x.append(round(X_Step,0))
         #Values_y.append(round(Y_Step,0))
@@ -56,10 +59,32 @@ def Steppercalculation(data):
         Values_y.append(int(Y_Step))
         
     return Values_x, Values_y, Process_time
+ 
+#file_path_csv = "result-tray.csv"
+#values_x = []
+#values_y = []
+#with open(file_path_csv, newline='') as csvfile:
+#    data_csv = csv.reader(csvfile)
+#    next(data_csv)  # ข้ามหัวตาราง
+#    for row in data_csv:
+#        values_x.append(int(row[0]))
+#        values_y.append(int(row[1]))
+# ตรวจสอบความถูกต้องของข้อมูลที่อ่านจากไฟล์ CSV
+#print("Values X:", values_x)
+#print("Values Y:", values_y)
 
-file_path = "C:/Users/Administrator/Desktop/Project-Arduino/Pyserial-Main/PySerial_Test/data_18.json"  # Adjust the path to your JSON file
+# อ่านข้อมูลจากไฟล์ JSON และนำข้อมูล column ที่ 3 เข้าสู่ Process_time
+#file_path_json = "data_18.json"
+#with open(file_path_json) as json_file:
+#    data_json = json.load(json_file)
+#    Process_time = [item[2] for item in data_json['data']]
+
+#print("Process_time:", Process_time)
+#values_Stepx,values_Stepy = Steppercalculation(values_x,values_y)
+file_path = "data_18.json"  # Adjust the path to your JSON file
 data = load_json(file_path)
 values_x, values_y, Process_time = Steppercalculation(data['data'])
+
 
 class App(tk.Tk):
     def __init__(self, screenName=None, baseName=None, className="Tk", useTk=True, sync=False, use=None) -> None:
@@ -68,7 +93,7 @@ class App(tk.Tk):
         #values_x, values_y = Steppercalculation(self.data)
         #self.data = [(random.randint(0, 100), random.randint(0, 100), random.randint(1, 10)) for _ in range(18)]
         self.data = [(values_x[i], values_y[i], Process_time[i]) for i in range(18)]
-        self.ser = serial.Serial('COM8', 115200, timeout=3)
+        self.ser = serial.Serial('COM4', 115200, timeout=3)
         self.iterator = 0
         time.sleep(2)
 
