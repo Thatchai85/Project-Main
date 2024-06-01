@@ -1,6 +1,8 @@
 #include <ArduinoJson.h>
 #include <AccelStepper.h>
 #include <SoftwareSerial.h>
+#include <Servo.h>
+Servo servo;
 
 //Define the stepper motorX1
 #define EN_PIN_X1 2
@@ -20,28 +22,26 @@ AccelStepper stepperX2(1,STEP_PIN_X2,DIR_PIN_X2);
 AccelStepper stepperY(1, STEP_PIN_Y, DIR_PIN_Y); // 1 motor, STEP_PIN, DIR_PIN
 
 //Define the stepper MotorZ pin
-#define EN_PIN_Z 40
-#define STEP_PIN_Z 42
-#define DIR_PIN_Z 44
+#define EN_PIN_Z 34
+#define STEP_PIN_Z 36
+#define DIR_PIN_Z 38
 AccelStepper stepperZ(1, STEP_PIN_Z, DIR_PIN_Z);
 
 //Define Limitswtich Pin
-const int limitX1 = 28;
-const int limitX2 = 30;
-const int limitY1 = 32; 
-const int limitZ = 34;
-
-const int resetboard = 38;
-int Laser = 36; // Define Laser pin
-
+//const int limitX1 = 26;
+const int limitX2 = 26;
+const int limitY1 = 28; 
+const int limitZ = 30;
+int relay = 22;
 const int motorspeed = 200;
+const int motorspeedz = 300;
 const int ac_speed = 200;
 bool motorStopped = false; // Flag to track if the motor has been stopped
 
 const int BUFFER_SIZE = 256; // Adjust based on the expected package size
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   
   pinMode(EN_PIN_X1, OUTPUT);
   digitalWrite(EN_PIN_X1, LOW);
@@ -49,7 +49,7 @@ void setup() {
   digitalWrite(EN_PIN_X2, LOW);
   
   pinMode(EN_PIN_Y, OUTPUT);
-  digitalWrite(EN_PIN_Y, LOW);
+  digitalWrite(EN_PIN_Y, LOW);  // Enable Stepper
 
   pinMode(EN_PIN_Z, OUTPUT);
   digitalWrite(EN_PIN_Z, LOW);
@@ -63,20 +63,21 @@ void setup() {
   stepperY.setMaxSpeed(motorspeed);
   stepperY.setAcceleration(ac_speed);
 
-  stepperZ.setMaxSpeed(motorspeed);
+  stepperZ.setMaxSpeed(motorspeedz);
   stepperZ.setAcceleration(ac_speed);
-
-  pinMode(limitX1, INPUT);
+  
+  servo.attach(24);
+  servo.write(0);
+  //pinMode(limitX1, INPUT);
   pinMode(limitX2, INPUT);
   pinMode(limitY1, INPUT);
   //pinMode(limitY2, INPUT);
-  pinMode(Laser, OUTPUT);
-  digitalWrite(resetboard, HIGH);
-  pinMode(resetboard, OUTPUT);
-  
+  pinMode(limitZ, INPUT);
+  pinMode(relay, OUTPUT);  
 }
 
 void loop() {
+  
   if (Serial.available() > 0) {
     //String command = Serial.readStringUntil('\n');
     //processCommand(command);
@@ -101,81 +102,158 @@ void loop() {
         // Extract values for position command
         int x = doc["data"]["x"];
         int y = doc["data"]["y"];
+        int z = doc["data"]["z"];
         int time_value = doc["data"]["t"];
-        // Process the received values
-        moveRobot(x, y, time_value);
-        moveZDown(time_value);
-        imerse(time_value);
-        moveZUp();
+        moveRobot(x, y, z, time_value);
+        //moveZDown(time_value);
+        //imerse(time_value);
+        //moveZUp();
       }
       else if (doc["command"] == "Homeposition") {
+        HomepositionZ();
         HomepositionX();
         HomepositionY();
-        HomepositionZ();
-        delay(2000);
-        resetBoard();
-        Serial.println("Board reset complete");
-        //laseron();
+        resetmotor();
       }
-      else if (doc["command"] == "HomepositionY") {
-        HomepositionY();
+      else if (doc["command"] == "Homestart") {
+        int x = doc["data"]["x"];
+        int y = doc["data"]["y"];
+        int z = doc["data"]["z"];
+        int time_value = doc["data"]["t"];
+        //HomepositionZ();
+        //HomepositionX();
+        //HomepositionY();
+        //resetmotor();
+        moveRobot(x, y, z, time_value);
+      }
+      else if (doc["command"] == "settoready") {
+        settoready();
       }
       else if (doc["command"] == "stop") {
-        // Process the stop command
         stopRobot();
       }
       else if (doc["command"] == "pause") {
         // Process the pause command
-        pauseRobot();
+        //pauseRobot();
       }
-      else if (doc["command"] == "laseron"){
-        laseron(); // ถ้าค่า val เท่ากับ 1 สั่งให้ Laser ติด
-      }
+      
     } 
   }
 }
 
-void laseron(){
-  digitalWrite(Laser, HIGH);
+void resetmotor(){ 
+  delay(3000);   
+  digitalWrite(relay, 1);   // Close relay
+  delay(1000); 
+  digitalWrite(relay, 0);   // Open relay
+  stepperX1.setCurrentPosition(0);
+  stepperX2.setCurrentPosition(0);
+  stepperY.setCurrentPosition(0);
+  stepperZ.setCurrentPosition(0);
   }
-  
-void resetBoard() {
-  delay(500);
-  digitalWrite(resetboard, LOW); // Assuming resetPin is the pin connected to the reset line
-  delay(500);
-  Serial.println("Resetting the board");
-}
-
-
 ///////////////////////Move to each position////////////////////////////
-void moveRobot(int x, int y, int time_value) {
-  Serial.println("request");
-  delay(1000);
+void moveRobot(int x, int y, int z, int time_value) {
+  delay(500);
+  servo.write(142);  // set servo to lock rack
+  delay(500);
   //Move stepper motorX1 motor X2
   stepperX1.setSpeed(motorspeed);
   stepperX2.setSpeed(motorspeed);
+  stepperY.setSpeed(motorspeed);
   stepperX1.moveTo(-x);
   stepperX2.moveTo(-x);
-  while (stepperX1.distanceToGo() !=0 || stepperX2.distanceToGo() !=0){
-    stepperX1.run();
-    stepperX2.run();
-    }
-  delay(2000); 
-  //Move stepper motorYs
-  stepperY.setSpeed(motorspeed);
   stepperY.moveTo(-y);
-  while (stepperY.distanceToGo() !=0){
-    stepperY.run();
+  while (stepperX1.distanceToGo() !=0 || stepperX2.distanceToGo() !=0 || stepperY.distanceToGo() !=0){
+      stepperX1.run();
+      stepperX2.run();
+      stepperY.run();
     }
-  delay(1000);
+  delay(2000);
+  Serial.println("Finish move x & y");
+  if (x == 0 && y == 0 && time_value == 0){
+    Serial.println("request");
+  }
+  else{
+    Serial.println("moving down");
+    //Move stepper Motor Z Up-down
+    Serial.println("Time to dipping:");
+    Serial.println(time_value);
+    stepperZ.setSpeed(motorspeedz);
+    stepperZ.moveTo(-2850); //3000
+    while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+    Serial.println("imersing");
+    delay(time_value * 1000);
+  
+    Serial.println("moving up");
+    stepperZ.setSpeed(600);
+    stepperZ.moveTo(-1500);
+    while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+    delay(300);
+    /////Shaking//////
+    Serial.println("Shaking the rack!");
+    delay(300);
+    stepperZ.setSpeed(600);
+    stepperZ.moveTo(-900);
+    while (stepperZ.distanceToGo() !=0){
+        stepperZ.run();
+      }
+    stepperZ.setSpeed(600);
+    stepperZ.moveTo(-1500);
+    while (stepperZ.distanceToGo() !=0){
+        stepperZ.run();
+      }
+    stepperZ.setSpeed(600);
+    stepperZ.moveTo(-900);
+    while (stepperZ.distanceToGo() !=0){
+        stepperZ.run();
+      }
+    stepperZ.setSpeed(600);
+    stepperZ.moveTo(-1500);
+    while (stepperZ.distanceToGo() !=0){
+        stepperZ.run();
+      }
+    stepperZ.setSpeed(600);
+    stepperZ.moveTo(-900);
+    while (stepperZ.distanceToGo() !=0){
+        stepperZ.run();
+      }
+    //////Request new position//////
+    stepperZ.setSpeed(motorspeedz);
+    stepperZ.moveTo(-500);
+    while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+    Serial.println("request");
+  }
 }
+void settoready(){
+  stepperX1.setSpeed(motorspeed);
+  stepperX2.setSpeed(motorspeed);
+  stepperY.setSpeed(motorspeed);
+  stepperZ.setSpeed(motorspeedz);
+  stepperX1.moveTo(0);
+  stepperX2.moveTo(0);
+  stepperY.moveTo(0);
+  stepperZ.moveTo(0);
+  servo.write(0);
+  while (stepperX1.distanceToGo() !=0 || stepperX2.distanceToGo() !=0 || stepperY.distanceToGo() !=0 || stepperZ.distanceToGo()!=0){
+        stepperX1.run();
+        stepperX2.run();
+        stepperY.run();
+        stepperZ.run();
+    }
+    Serial.println("Homeposition already");
+  
+  }
 
 ///////////////////Home Position X//////////////////////////
 void HomepositionX(){
   Serial.println("Homing started for X axis");
   runmotorXforward();
-  //runmotorX1forward();
-  //runmotorX2forward();
 }
 
 void runmotorXforward(){
@@ -185,10 +263,10 @@ void runmotorXforward(){
   stepperX2.moveTo(3000);
   Serial.println("Motor running forward");
   while (stepperX1.distanceToGo() != 0 && stepperX2.distanceToGo() != 0) {
-    if (digitalRead(limitX1) == HIGH || digitalRead(limitX2) == HIGH) {
+    if (digitalRead(limitX2) == HIGH) {
       stepperX1.stop();
       stepperX2.stop();
-      Serial.println("Limit switchY1 activated. Homing complete for Y1 axis");
+      Serial.println("Limit switchX activated. Homing complete for X axis");
       delay(3000);
       Serial.println("Move back a little bit");
       stepperX1.setAcceleration(500);
@@ -196,7 +274,7 @@ void runmotorXforward(){
       stepperX1.setSpeed(-motorspeed);
       stepperX2.setSpeed(-motorspeed);
       stepperX1.move(-15);
-      stepperX2.move(-15);
+      stepperX2.move(-20);
       stepperX1.runToPosition();
       stepperX2.runToPosition();
       Serial.println("Homing complete. Motor at home position.");
@@ -216,19 +294,18 @@ void HomepositionY() {
 void runmotorYforward() {
   //stepperY.setAcceleration(500);
   stepperY.setSpeed(motorspeed);
-  stepperY.moveTo(1800);
-  Serial.println("Motor running forward");
+  stepperY.moveTo(2000);
+  Serial.println("Motor Y running forward");
   while (stepperY.distanceToGo() != 0) {
     if (digitalRead(limitY1) == HIGH) {
       stepperY.stop();
-      Serial.println("Limit switchY1 activated. Homing complete for Y axis");
+      Serial.println("Limit switchY activated. Homing complete for Y axis");
       delay(3000);
       Serial.println("Move back a little bit");
       stepperY.setAcceleration(500);
       stepperY.setSpeed(-motorspeed);
       stepperY.move(-15); // Move back 4 steps
       stepperY.runToPosition();
-
       Serial.println("Homing complete. Motor at home position.");
       break;
     }
@@ -240,10 +317,12 @@ void runmotorYforward() {
 void HomepositionZ(){
   Serial.println("Motor running forward");
   runmotorZforward();
+  servo.write(0);
+  //Serial.println("start");
   }
   
 void runmotorZforward(){
-  stepperZ.setSpeed(motorspeed);
+  stepperZ.setSpeed(motorspeedz);
   stepperZ.moveTo(3800);
   Serial.println("Motor Z running forward");
   while (stepperZ.distanceToGo() != 0) {
@@ -253,10 +332,9 @@ void runmotorZforward(){
       delay(3000);
       Serial.println("Move back a little bit");
       stepperZ.setAcceleration(500);
-      stepperZ.setSpeed(-motorspeed);
-      stepperZ.move(-30); // Move back 4 steps
+      stepperZ.setSpeed(-motorspeedz);
+      stepperZ.move(-35); // Move back 4 steps
       stepperZ.runToPosition();
-
       Serial.println("Homing complete. Motor at home position.");
       break;
     }
@@ -264,8 +342,31 @@ void runmotorZforward(){
   }
 }
 /////////////////////////////////////////////////////////////////
+
+void stopRobot() {
+  Serial.println("Paused");
+  stepperX1.stop();
+  stepperX2.stop();
+  stepperY.stop();
+  stepperZ.stop();
+}
+
 void moveZDown(int x, int y, int time_value){
   if (x == 0 && y ==0){
+    stepperZ.setSpeed(motorspeedz);
+    stepperZ.moveTo(-2000);
+    while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+    Serial.println("imersing");
+    stepperZ.stop();
+    delay(5000);
+  
+    Serial.println("moving up");
+    stepperZ.moveTo(500);
+    while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
     Serial.println("request");
   }
   else{
@@ -273,14 +374,42 @@ void moveZDown(int x, int y, int time_value){
     //Move stepper Motor Z Up-down
     Serial.println("Time to dipping:");
     Serial.println(time_value);
-    stepperZ.setSpeed(motorspeed);
-    stepperZ.moveTo(-3700);
+    stepperZ.setSpeed(motorspeedz);
+    stepperZ.moveTo(-2000);
     while (stepperZ.distanceToGo() !=0){
       stepperZ.run();
     }
     delay(1000);
+    //////////Shaking////////
+    Shaking();
   }
 }
+
+void Shaking(){
+  Serial.println("Shaking the rack!");
+  delay(300);
+  stepperZ.setSpeed(400);
+  stepperZ.moveTo(-1000);
+  while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+  stepperZ.setSpeed(400);
+  stepperZ.moveTo(500);
+  while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+  stepperZ.setSpeed(400);
+  stepperZ.moveTo(-1000);
+  while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+  stepperZ.setSpeed(400);
+  stepperZ.moveTo(500);
+  while (stepperZ.distanceToGo() !=0){
+      stepperZ.run();
+    }
+}
+/*
 void imerse(int time_value){
   // Implement your imersing task
   Serial.println("imersing");
@@ -289,29 +418,16 @@ void imerse(int time_value){
 
 void moveZUp(){
   Serial.println("moving up");
-  stepperZ.moveTo(-2200);
+  stepperZ.moveTo(200);
   while (stepperZ.distanceToGo() !=0){
     stepperZ.run();
     }
   delay(1000);
   Serial.println("request");
 }
+*/
 
-
-void stopRobot() {
-  Serial.println("Robot stopped");
-}
-
-void pauseRobot() {
-  Serial.println("Paused");
-  stepperX1.stop();
-  stepperX2.stop();
-  stepperY.stop();
-}
-
-void ShakeRack(){
-  // Implement shaking method to spilt chemical from the rack
-  Serial.println("Shaking the rack!");
-}
-
-///////////////Function//////////////////
+///////////////Servo//////////////////
+void HomepositionServo(){
+  servo.write(0);
+  }
